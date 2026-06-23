@@ -1,48 +1,35 @@
 /**
- * Root application component.
- * Assembles all UI panels and the canvas into the whiteboard layout.
+ * components/App.tsx
+ * -----------------------------------------------------------------------------
+ * Root application shell. Composes the canvas with the floating UI panels and
+ * installs the global keyboard shortcut handler.
  */
 
-import React from 'react';
-import { AppProvider } from '../store/AppContext';
-import { Canvas } from './Canvas';
-import { Toolbar } from './Toolbar';
-import { TopBar } from './TopBar';
-import { StylePanel } from './StylePanel';
-import { ZoomControls } from './ZoomControls';
-import { useKeyboard } from '../hooks/useKeyboard';
+import { useEffect } from "react";
+import { Canvas } from "./Canvas";
+import { Toolbar } from "./Toolbar";
+import { TopBar } from "./TopBar";
+import { PropertiesPanel } from "./PropertiesPanel";
+import { ZoomControls } from "./ZoomControls";
+import { handleKeyDown } from "../interaction/keyboard";
 
-function WhiteboardApp() {
-  // Register keyboard shortcuts
-  useKeyboard();
+export function App(): JSX.Element {
+  // Install global keyboard shortcuts.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (handleKeyDown(e)) e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
     <div className="app">
-      {/* Top bar */}
+      <Canvas />
       <TopBar />
-
-      {/* Main content area */}
-      <div className="app-body">
-        {/* Left toolbar */}
-        <Toolbar />
-
-        {/* Canvas */}
-        <Canvas />
-
-        {/* Right style panel */}
-        <StylePanel />
-      </div>
-
-      {/* Floating zoom controls */}
+      <Toolbar />
+      <PropertiesPanel />
       <ZoomControls />
     </div>
-  );
-}
-
-export function App() {
-  return (
-    <AppProvider>
-      <WhiteboardApp />
-    </AppProvider>
   );
 }

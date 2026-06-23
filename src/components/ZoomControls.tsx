@@ -1,73 +1,54 @@
 /**
- * Floating zoom controls in the bottom-right corner.
+ * components/ZoomControls.tsx
+ * -----------------------------------------------------------------------------
+ * Floating bottom-left zoom controls: zoom out, current percentage (click to
+ * reset to 100%), and zoom in. Zoom is centered on the viewport middle.
  */
 
-import React from 'react';
-import { useAppContext } from '../store/AppContext';
-import { ZOOM_LEVELS, MIN_ZOOM, MAX_ZOOM } from '../types';
+import { useStoreState } from "../state/useStore";
+import { MinusIcon, PlusIcon } from "./Icons";
+import { resetZoomTo100, stepZoom, zoomToFit } from "../interaction/viewport";
 
-export function ZoomControls() {
-  const { state, dispatch } = useAppContext();
-  const zoom = state.viewTransform.zoom;
-  const zoomPercent = Math.round(zoom * 100);
+export function ZoomControls(): JSX.Element {
+  const zoom = useStoreState((s) => s.viewport.zoom);
 
-  const zoomIn = () => {
-    const next = ZOOM_LEVELS.find(z => z > zoom) ?? MAX_ZOOM;
-    dispatch({ type: 'SET_ZOOM', zoom: next });
-  };
-
-  const zoomOut = () => {
-    const prev = [...ZOOM_LEVELS].reverse().find(z => z < zoom) ?? MIN_ZOOM;
-    dispatch({ type: 'SET_ZOOM', zoom: prev });
-  };
-
-  const resetZoom = () => {
-    dispatch({ type: 'SET_VIEW_TRANSFORM', transform: { zoom: 1, offsetX: 0, offsetY: 0 } });
-  };
-
-  const fitToScreen = () => {
-    // This would need canvas dimensions - simplified version
-    dispatch({ type: 'SET_VIEW_TRANSFORM', transform: { zoom: 1, offsetX: 0, offsetY: 0 } });
-  };
+  // Center the zoom operation on the current window center.
+  const center = (): [number, number] => [
+    window.innerWidth / 2,
+    window.innerHeight / 2,
+  ];
 
   return (
-    <div className="zoom-controls">
+    <div className="zoom-controls" role="group" aria-label="Zoom">
       <button
-        className="zoom-btn"
-        onClick={zoomOut}
-        disabled={zoom <= MIN_ZOOM}
-        title="Zoom Out (Ctrl+-)"
-        aria-label="Zoom Out"
+        className="icon-button"
+        onClick={() => stepZoom(-1, ...center())}
+        title="Zoom out (Ctrl+-)"
+        aria-label="Zoom out"
       >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-          <circle cx="11" cy="11" r="8"/>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          <line x1="8" y1="11" x2="14" y2="11"/>
-        </svg>
+        <MinusIcon size={16} />
       </button>
-
       <button
-        className="zoom-level-btn"
-        onClick={resetZoom}
-        title="Reset Zoom (Ctrl+0)"
-        aria-label={`Zoom: ${zoomPercent}%`}
+        className="zoom-label"
+        onClick={() => resetZoomTo100(...center())}
+        title="Reset zoom to 100% (Ctrl+0)"
       >
-        {zoomPercent}%
+        {Math.round(zoom * 100)}%
       </button>
-
       <button
-        className="zoom-btn"
-        onClick={zoomIn}
-        disabled={zoom >= MAX_ZOOM}
-        title="Zoom In (Ctrl+=)"
-        aria-label="Zoom In"
+        className="icon-button"
+        onClick={() => stepZoom(1, ...center())}
+        title="Zoom in (Ctrl+=)"
+        aria-label="Zoom in"
       >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-          <circle cx="11" cy="11" r="8"/>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          <line x1="11" y1="8" x2="11" y2="14"/>
-          <line x1="8" y1="11" x2="14" y2="11"/>
-        </svg>
+        <PlusIcon size={16} />
+      </button>
+      <button
+        className="text-button"
+        onClick={() => zoomToFit(window.innerWidth, window.innerHeight)}
+        title="Zoom to fit"
+      >
+        Fit
       </button>
     </div>
   );

@@ -1,188 +1,128 @@
 /**
- * Top bar with undo/redo, export, import, and canvas controls.
+ * components/TopBar.tsx
+ * -----------------------------------------------------------------------------
+ * Top controls bar: menu (import/export/reset), undo/redo, and grid toggle.
  */
 
-import React, { useRef } from 'react';
-import { useAppContext } from '../store/AppContext';
-import { exportToPNG, exportToSVG, downloadJSON, importFromJSON, readFileAsText } from '../utils/exportImport';
+import { store, useStoreState } from "../state/useStore";
+import { MenuIcon, RedoIcon, UndoIcon } from "./Icons";
+import {
+  downloadText,
+  jsonToScene,
+  openTextFile,
+  sceneToJSON,
+} from "../io/serialize";
+import { downloadPNG, downloadSVG } from "../io/exportImage";
+import { useState } from "react";
 
-export function TopBar() {
-  const { state, dispatch, getVisibleElements } = useAppContext();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+export function TopBar(): JSX.Element {
+  const canUndo = useStoreState((s) => s.canUndo);
+  const canRedo = useStoreState((s) => s.canRedo);
+  const showGrid = useStoreState((s) => s.showGrid);
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  const canUndo = state.history.past.length > 0;
-  const canRedo = state.history.future.length > 0;
-
-  const handleExportPNG = () => {
-    exportToPNG(getVisibleElements(), 2, 20, true, 'whiteboard.png');
+  const exportJSON = () => {
+    const s = store.getState();
+    downloadText(
+      "whiteboard.json",
+      sceneToJSON({ elements: s.elements, viewport: s.viewport }),
+    );
+    setMenuOpen(false);
   };
 
-  const handleExportSVG = () => {
-    exportToSVG(getVisibleElements(), 20, true, 'whiteboard.svg');
-  };
-
-  const handleExportJSON = () => {
-    downloadJSON(getVisibleElements(), state.viewTransform, 'whiteboard.json');
-  };
-
-  const handleImportJSON = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const importJSON = async () => {
+    setMenuOpen(false);
     try {
-      const text = await readFileAsText(file);
-      const data = importFromJSON(text);
-      if (data) {
-        dispatch({ type: 'PUSH_HISTORY' });
-        dispatch({ type: 'SET_ELEMENTS', elements: data.elements });
-        if (data.viewTransform) {
-          dispatch({ type: 'SET_VIEW_TRANSFORM', transform: data.viewTransform });
-        }
-      }
+      const text = await openTextFile("application/json");
+      const scene = jsonToScene(text);
+      store.loadDocument(scene.elements, scene.viewport);
     } catch (err) {
-      console.error('Failed to import file:', err);
+      console.error("Import failed:", err);
+      alert("Could not import file: " + (err as Error).message);
     }
-    // Reset input
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleClearCanvas = () => {
-    if (window.confirm('Clear the canvas? This cannot be undone.')) {
-      dispatch({ type: 'RESET_CANVAS' });
+  const exportPNG = () => {
+    void downloadPNG(store.getState().elements);
+    setMenuOpen(false);
+  };
+
+  const exportSVG = () => {
+    downloadSVG(store.getState().elements);
+    setMenuOpen(false);
+  };
+
+  const reset = () => {
+    if (confirm("Clear the entire canvas? This cannot be undone.")) {
+      store.resetScene();
     }
+    setMenuOpen(false);
   };
 
   return (
-    <div className="top-bar">
-      {/* App Logo */}
-      <div className="top-bar-logo">
-        <svg viewBox="0 0 32 32" width="28" height="28">
-          <rect x="2" y="2" width="28" height="28" rx="6" fill="#6965db"/>
-          <path d="M8 22 L14 10 L20 22" stroke="white" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-          <line x1="10" y1="18" x2="18" y2="18" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
-        </svg>
-        <span className="top-bar-title">Whiteboard</span>
+    <header className="top-bar">
+      <div className="top-bar-left">
+        <div className="menu-wrapper">
+          <button
+            className="icon-button"
+            aria-label="Menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((o) => !o)}
+          >
+            <MenuIcon size={18} />
+          </button>
+          {menuOpen && (
+            <div className="menu-dropdown" role="menu">
+              <button role="menuitem" onClick={importJSON}>
+                Open… (JSON)
+              </button>
+              <button role="menuitem" onClick={exportJSON}>
+                Save to… (JSON)
+              </button>
+              <div className="menu-divider" />
+              <button role="menuitem" onClick={exportPNG}>
+                Export PNG
+              </button>
+              <button role="menuitem" onClick={exportSVG}>
+                Export SVG
+              </button>
+              <div className="menu-divider" />
+              <button role="menuitem" className="danger" onClick={reset}>
+                Reset canvas
+              </button>
+            </div>
+          )}
+        </div>
+        <span className="app-title">Whiteboard</span>
       </div>
 
-      {/* Undo / Redo */}
-      <div className="top-bar-group">
+      <div className="top-bar-right">
         <button
-          className="top-bar-btn"
-          onClick={() => dispatch({ type: 'UNDO' })}
+          className="icon-button"
           disabled={!canUndo}
+          onClick={() => store.undo()}
           title="Undo (Ctrl+Z)"
           aria-label="Undo"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="9 14 4 9 9 4"/>
-            <path d="M20 20v-7a4 4 0 0 0-4-4H4"/>
-          </svg>
+          <UndoIcon size={18} />
         </button>
         <button
-          className="top-bar-btn"
-          onClick={() => dispatch({ type: 'REDO' })}
+          className="icon-button"
           disabled={!canRedo}
-          title="Redo (Ctrl+Y)"
+          onClick={() => store.redo()}
+          title="Redo (Ctrl+Shift+Z)"
           aria-label="Redo"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 14 20 9 15 4"/>
-            <path d="M4 20v-7a4 4 0 0 1 4-4h12"/>
-          </svg>
-        </button>
-      </div>
-
-      <div className="top-bar-divider"/>
-
-      {/* Grid Toggle */}
-      <div className="top-bar-group">
-        <button
-          className={`top-bar-btn ${state.showGrid ? 'active' : ''}`}
-          onClick={() => dispatch({ type: 'TOGGLE_GRID' })}
-          title="Toggle Grid"
-          aria-label="Toggle Grid"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <rect x="3" y="3" width="7" height="7"/>
-            <rect x="14" y="3" width="7" height="7"/>
-            <rect x="3" y="14" width="7" height="7"/>
-            <rect x="14" y="14" width="7" height="7"/>
-          </svg>
+          <RedoIcon size={18} />
         </button>
         <button
-          className={`top-bar-btn ${state.snapToGrid ? 'active' : ''}`}
-          onClick={() => dispatch({ type: 'TOGGLE_SNAP' })}
-          title="Snap to Grid"
-          aria-label="Snap to Grid"
+          className={`text-button${showGrid ? " active" : ""}`}
+          onClick={() => store.toggleGrid()}
+          title="Toggle grid"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
-          </svg>
+          Grid
         </button>
       </div>
-
-      <div className="top-bar-divider"/>
-
-      {/* Export */}
-      <div className="top-bar-group">
-        <div className="dropdown">
-          <button className="top-bar-btn dropdown-trigger" title="Export">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            <span>Export</span>
-          </button>
-          <div className="dropdown-menu">
-            <button className="dropdown-item" onClick={handleExportPNG}>
-              Export as PNG
-            </button>
-            <button className="dropdown-item" onClick={handleExportSVG}>
-              Export as SVG
-            </button>
-            <button className="dropdown-item" onClick={handleExportJSON}>
-              Export as JSON
-            </button>
-          </div>
-        </div>
-
-        <button
-          className="top-bar-btn"
-          onClick={() => fileInputRef.current?.click()}
-          title="Import JSON"
-          aria-label="Import"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="17 8 12 3 7 8"/>
-            <line x1="12" y1="3" x2="12" y2="15"/>
-          </svg>
-          <span>Import</span>
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".json"
-          onChange={handleImportJSON}
-          style={{ display: 'none' }}
-        />
-      </div>
-
-      <div className="top-bar-divider"/>
-
-      {/* Clear */}
-      <button
-        className="top-bar-btn danger"
-        onClick={handleClearCanvas}
-        title="Clear Canvas"
-        aria-label="Clear Canvas"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="3 6 5 6 21 6"/>
-          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-        </svg>
-      </button>
-    </div>
+    </header>
   );
 }
